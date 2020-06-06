@@ -1,191 +1,214 @@
 module Main exposing (main)
 
 import Browser
-import Html exposing (..)
+import Html exposing (Html, button, div, h1, h3, h4, section, span, text)
 import Html.Attributes exposing (class)
 import Html.Events exposing (onClick)
-import Random
+import Round
 
 
-main : Program () Model Msg
-main =
-    Browser.element
-        { init = \() -> ( initialModel, Cmd.none )
-        , view = view
-        , update = update
-        , subscriptions = subscriptions
-        }
+
+-- Domain types
 
 
-type GameResult
-    = PlayerWon
-    | CpuWon
-    | Tie
+type Price
+    = Price Float
 
 
-type Choice
-    = Rock
-    | Paper
-    | Scissors
+priceToString : Price -> String
+priceToString (Price p) =
+    Round.floor 2 p
 
 
-type alias PlayerScore =
-    Int
+type Amount
+    = Amount Int
 
 
-type alias CpuScore =
-    Int
+amountToString : Amount -> String
+amountToString (Amount a) =
+    String.fromInt a
 
 
-type alias Score =
-    ( PlayerScore, CpuScore )
+type Discount
+    = Discount Float
 
 
-type GameState
-    = AwaitingPlayerChoice
-    | AwaitingCpuChoice
-    | GameFinished
+discountToString : Discount -> String
+discountToString (Discount d) =
+    String.fromFloat d
+
+
+type AmountDiscount
+    = AmountDiscount Float
+
+
+amountDiscountToString : AmountDiscount -> String
+amountDiscountToString (AmountDiscount a) =
+    String.fromFloat a
+
+
+type alias Item =
+    { name : String
+    , price : Price
+    , unitOfMeasure : UnitOfMeasure
+    , deal : Maybe Deal
+    }
+
+
+type UnitOfMeasure
+    = Ounce Float
+    | Bag
+    | Head
+    | Bushel
+    | Box
+    | Can
+    | Unit
+
+
+unitOfMeasureToString : UnitOfMeasure -> String
+unitOfMeasureToString u =
+    case u of
+        Ounce ounces ->
+            String.fromFloat ounces
+
+        Bag ->
+            "bag"
+
+        Head ->
+            "head"
+
+        Bushel ->
+            "bushel"
+
+        Box ->
+            "box"
+
+        Can ->
+            "can"
+
+        Unit ->
+            "unit"
+
+
+type Deal
+    = PriceDeal Amount Price
+    | BulkDeal Amount AmountDiscount Discount
+
+
+canOfBeans : Item
+canOfBeans =
+    { name = "Beans"
+    , price = Price 0.5
+    , unitOfMeasure = Can
+    , deal = Nothing
+    }
+
+
+headOfLettuce : Item
+headOfLettuce =
+    { name = "Lettuce"
+    , price = Price 1
+    , unitOfMeasure = Head
+    , deal = Just (PriceDeal (Amount 3) (Price 1))
+    }
+
+
+bagOfCashews : Item
+bagOfCashews =
+    { name = "Cashews"
+    , price = Price 2.25
+    , unitOfMeasure = Bag
+    , deal = Just (BulkDeal (Amount 2) (AmountDiscount 1) (Discount 50))
+    }
+
+
+
+-- Model
 
 
 type alias Model =
-    { playerScore : PlayerScore
-    , cpuScore : CpuScore
-    , playerChoice : Choice
-    , cpuChoice : Choice
-    , gameResult : GameResult
-    , gameState : GameState
-    }
+    { items : List Item }
 
 
 initialModel : Model
 initialModel =
-    { playerScore = 0
-    , cpuScore = 0
-    , playerChoice = Rock
-    , cpuChoice = Rock
-    , gameResult = Tie
-    , gameState = AwaitingPlayerChoice
-    }
+    { items = [ canOfBeans, headOfLettuce, bagOfCashews ] }
 
 
 type Msg
-    = PlayerMadeChoice Choice
-    | PickCpuChoice Choice
+    = NoOp
 
 
-update : Msg -> Model -> ( Model, Cmd Msg )
+update : Msg -> Model -> Model
 update msg model =
     case msg of
-        PlayerMadeChoice playerChoice ->
-            ( { model
-                | gameState = AwaitingCpuChoice
-                , playerChoice = playerChoice
-              }
-            , Random.generate PickCpuChoice (Random.uniform Rock [ Paper, Scissors ])
-            )
-
-        PickCpuChoice cpuChoice ->
-            let
-                result =
-                    getGameResult cpuChoice Rock
-
-                ( newPlayerScore, newCpuScore ) =
-                    gameResultToScore result ( model.playerScore, model.cpuScore )
-            in
-            ( { model
-                | gameState = GameFinished
-                , playerScore = newPlayerScore
-                , cpuScore = newCpuScore
-                , cpuChoice = cpuChoice
-                , gameResult = result
-              }
-            , Cmd.none
-            )
-
-
-subscriptions : Model -> Sub Msg
-subscriptions _ =
-    Sub.none
+        NoOp ->
+            model
 
 
 view : Model -> Html Msg
 view model =
-    let
-        titleContent =
-            case model.gameState of
-                AwaitingPlayerChoice ->
-                    "Let the games begin!"
-
-                AwaitingCpuChoice ->
-                    "CPU Deciding..."
-
-                GameFinished ->
-                    case model.gameResult of
-                        PlayerWon ->
-                            "You win!"
-
-                        CpuWon ->
-                            "CPU wins!"
-
-                        Tie ->
-                            "It's a tie!"
-    in
     div []
-        [ header []
-            [ span [ class "score-label player" ] [ text "player" ]
-            , span [ class "score" ] [ text (String.fromInt model.playerScore ++ ":") ]
-            , span [ class "score" ] [ text (String.fromInt model.cpuScore) ]
-            , span [ class "score-label cpu" ] [ text "cpu" ]
+        (List.map
+            viewItem
+            model.items
+        )
+
+
+viewItem : Item -> Html Msg
+viewItem item =
+    section []
+        [ h1 [] [ text item.name ]
+        , h3 []
+            [ text
+                ("$"
+                    ++ priceToString item.price
+                    ++ "/"
+                    ++ unitOfMeasureToString item.unitOfMeasure
+                )
             ]
-        , div []
-            [ h1 [] [ text titleContent ]
-            , button [ onClick (PlayerMadeChoice Rock), class "rock-button" ] []
-            , button [ onClick (PlayerMadeChoice Paper), class "paper-button" ] []
-            , button [ onClick (PlayerMadeChoice Scissors), class "scissors-button" ] []
-            ]
-        , footer []
-            [ h4 [] [ text "Make your move" ]
-            ]
+        , case item.deal of
+            Just deal ->
+                viewDeal deal
+
+            Nothing ->
+                text ""
         ]
 
 
-getGameResult : Choice -> Choice -> GameResult
-getGameResult playerChoice cpuChoice =
-    if playerChoice == cpuChoice then
-        Tie
+viewDeal : Deal -> Html Msg
+viewDeal deal =
+    let
+        dealText =
+            case deal of
+                PriceDeal amount price ->
+                    let
+                        a =
+                            amountToString amount
 
-    else
-        case playerChoice of
-            Paper ->
-                if cpuChoice == Rock then
-                    PlayerWon
+                        p =
+                            priceToString price
+                    in
+                    "Selling " ++ a ++ " for $" ++ p ++ "!"
 
-                else
-                    CpuWon
-
-            Rock ->
-                if cpuChoice == Scissors then
-                    PlayerWon
-
-                else
-                    CpuWon
-
-            Scissors ->
-                if cpuChoice == Paper then
-                    PlayerWon
-
-                else
-                    CpuWon
+                BulkDeal amount amountDiscount discount ->
+                    "Buy "
+                        ++ amountToString amount
+                        ++ ", "
+                        ++ amountDiscountToString amountDiscount
+                        ++ discountToString discount
+                        ++ "% off!"
+    in
+    div []
+        [ span [ class "deal-label" ] [ text "Hot deal! " ]
+        , span [ class "deal-text" ] [ text dealText ]
+        ]
 
 
-gameResultToScore : GameResult -> Score -> Score
-gameResultToScore result ( playerScore, cpuScore ) =
-    case result of
-        PlayerWon ->
-            ( playerScore + 1, cpuScore )
-
-        CpuWon ->
-            ( playerScore, cpuScore + 1 )
-
-        Tie ->
-            ( playerScore + 1, cpuScore + 1 )
+main : Program () Model Msg
+main =
+    Browser.sandbox
+        { init = initialModel
+        , view = view
+        , update = update
+        }
