@@ -1,7 +1,7 @@
 module Main exposing (main)
 
 import Browser
-import Html exposing (Html, button, div, h1, h3, h4, section, span, text)
+import Html exposing (Html, button, div, h1, h3, h4, main_, section, span, text)
 import Html.Attributes exposing (class)
 import Html.Events exposing (onClick)
 import Round
@@ -11,45 +11,9 @@ import Round
 -- Domain types
 
 
-type Price
-    = Price Float
-
-
-priceToString : Price -> String
-priceToString (Price p) =
-    Round.floor 2 p
-
-
-type Amount
-    = Amount Int
-
-
-amountToString : Amount -> String
-amountToString (Amount a) =
-    String.fromInt a
-
-
-type Discount
-    = Discount Float
-
-
-discountToString : Discount -> String
-discountToString (Discount d) =
-    String.fromFloat d
-
-
-type AmountDiscount
-    = AmountDiscount Float
-
-
-amountDiscountToString : AmountDiscount -> String
-amountDiscountToString (AmountDiscount a) =
-    String.fromFloat a
-
-
 type alias Item =
     { name : String
-    , price : Price
+    , price : Float
     , unitOfMeasure : UnitOfMeasure
     , deal : Maybe Deal
     }
@@ -91,14 +55,21 @@ unitOfMeasureToString u =
 
 
 type Deal
-    = PriceDeal Amount Price
-    | BulkDeal Amount AmountDiscount Discount
+    = PriceDeal
+        { amount : Float
+        , price : Float
+        }
+    | BulkDeal
+        { amount : Float
+        , amountDiscount : Float
+        , discount : Float
+        }
 
 
 canOfBeans : Item
 canOfBeans =
     { name = "Beans"
-    , price = Price 0.5
+    , price = 0.5
     , unitOfMeasure = Can
     , deal = Nothing
     }
@@ -107,18 +78,64 @@ canOfBeans =
 headOfLettuce : Item
 headOfLettuce =
     { name = "Lettuce"
-    , price = Price 1
+    , price = 1
     , unitOfMeasure = Head
-    , deal = Just (PriceDeal (Amount 3) (Price 1))
+    , deal = Just (PriceDeal { amount = 3, price = 1 })
     }
+
+
+
+-- calculateItemsPrice : List Item -> Price
+-- calculateItemsPrice items =
+--     case List.head items of
+--         Just item ->
+--             case item.deal of
+--                 Just deal ->
+--                     case deal of
+--                         PriceDeal amount price ->
+--                             -- 3/$1
+--                             let
+--                                 itemCount =
+--                                     List.length items
+--                                 remainder =
+--                                     remainderBy (Amount amount) itemCount
+--                             in
+--                             Price 1
+--                         BulkDeal amount amountDiscount discount ->
+--                             Price 0
+--                 Nothing ->
+--                     item.price
+--         Nothing ->
+--             Price 0
+-- let remainder = List.length items %
+{-
+   items.length % deal.amount
+   51 % 3 == 0
+   50 % 3 == 2
+
+   const totalDealPrice = (items.length / deal.amount) * deal.price
+
+   if (remainder == 0) {
+       return totalDealPrice
+   } else {
+       return totalDealPrice + (remainder * item.price)
+   }
+-}
 
 
 bagOfCashews : Item
 bagOfCashews =
     { name = "Cashews"
-    , price = Price 2.25
+    , price = 2.25
     , unitOfMeasure = Bag
-    , deal = Just (BulkDeal (Amount 2) (AmountDiscount 1) (Discount 50))
+    , deal =
+        Just
+            (BulkDeal
+                { amount = 2
+                , amountDiscount = 1
+                , discount = 50
+                }
+            )
     }
 
 
@@ -127,32 +144,35 @@ bagOfCashews =
 
 
 type alias Model =
-    { items : List Item }
+    { items : List Item
+    , cart : List Item
+    }
 
 
 initialModel : Model
 initialModel =
-    { items = [ canOfBeans, headOfLettuce, bagOfCashews ] }
+    { items = [ canOfBeans, headOfLettuce, bagOfCashews ]
+    , cart = []
+    }
 
 
 type Msg
-    = NoOp
+    = AddToCart Item
 
 
 update : Msg -> Model -> Model
 update msg model =
     case msg of
-        NoOp ->
-            model
+        AddToCart item ->
+            { model | cart = model.cart ++ [ item ] }
 
 
 view : Model -> Html Msg
 view model =
-    div []
-        (List.map
-            viewItem
-            model.items
-        )
+    main_ []
+        [ section [] (List.map viewItem model.items)
+        , section [ class "cart" ] (viewCart model.cart)
+        ]
 
 
 viewItem : Item -> Html Msg
@@ -162,11 +182,12 @@ viewItem item =
         , h3 []
             [ text
                 ("$"
-                    ++ priceToString item.price
+                    ++ String.fromFloat item.price
                     ++ "/"
                     ++ unitOfMeasureToString item.unitOfMeasure
                 )
             ]
+        , button [ onClick (AddToCart item) ] [ text "Add" ]
         , case item.deal of
             Just deal ->
                 viewDeal deal
@@ -181,28 +202,30 @@ viewDeal deal =
     let
         dealText =
             case deal of
-                PriceDeal amount price ->
-                    let
-                        a =
-                            amountToString amount
+                PriceDeal d ->
+                    "Selling "
+                        ++ String.fromFloat d.amount
+                        ++ " for $"
+                        ++ String.fromFloat d.price
+                        ++ "!"
 
-                        p =
-                            priceToString price
-                    in
-                    "Selling " ++ a ++ " for $" ++ p ++ "!"
-
-                BulkDeal amount amountDiscount discount ->
+                BulkDeal d ->
                     "Buy "
-                        ++ amountToString amount
+                        ++ String.fromFloat d.amount
                         ++ ", "
-                        ++ amountDiscountToString amountDiscount
-                        ++ discountToString discount
+                        ++ String.fromFloat d.amountDiscount
+                        ++ String.fromFloat d.discount
                         ++ "% off!"
     in
     div []
         [ span [ class "deal-label" ] [ text "Hot deal! " ]
         , span [ class "deal-text" ] [ text dealText ]
         ]
+
+
+viewCart : List Item -> List (Html Msg)
+viewCart items =
+    List.map (\i -> h4 [] [ text i.name ]) items
 
 
 main : Program () Model Msg
