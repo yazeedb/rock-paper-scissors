@@ -11,11 +11,27 @@ import Round
 -- Domain types
 
 
+type Rule
+    = Normal Item
+    | HasPriceDeal Item PriceDeal
+    | HasBulkDeal Item BulkDeal
+
+
 type alias Item =
     { name : String
     , price : Float
     , unitOfMeasure : UnitOfMeasure
-    , deal : Maybe Deal
+    }
+
+
+type alias PriceDeal =
+    { amount : Float, price : Float }
+
+
+type alias BulkDeal =
+    { amount : Float
+    , amountDiscount : Float
+    , discount : Float
     }
 
 
@@ -54,18 +70,6 @@ unitOfMeasureToString u =
             "unit"
 
 
-type Deal
-    = PriceDeal
-        { amount : Float
-        , price : Float
-        }
-    | BulkDeal
-        { amount : Float
-        , amountDiscount : Float
-        , discount : Float
-        }
-
-
 canOfBeans : Item
 canOfBeans =
     { name = "Beans"
@@ -85,61 +89,6 @@ headOfLettuce =
 
 
 
--- calculateItemsPrice : List Item -> Price
--- calculateItemsPrice items =
---     case List.head items of
---         Just item ->
---             case item.deal of
---                 Just deal ->
---                     case deal of
---                         PriceDeal amount price ->
---                             -- 3/$1
---                             let
---                                 itemCount =
---                                     List.length items
---                                 remainder =
---                                     remainderBy (Amount amount) itemCount
---                             in
---                             Price 1
---                         BulkDeal amount amountDiscount discount ->
---                             Price 0
---                 Nothing ->
---                     item.price
---         Nothing ->
---             Price 0
--- let remainder = List.length items %
-{-
-   items.length % deal.amount
-   51 % 3 == 0
-   50 % 3 == 2
-
-   const totalDealPrice = (items.length / deal.amount) * deal.price
-
-   if (remainder == 0) {
-       return totalDealPrice
-   } else {
-       return totalDealPrice + (remainder * item.price)
-   }
--}
-
-
-bagOfCashews : Item
-bagOfCashews =
-    { name = "Cashews"
-    , price = 2.25
-    , unitOfMeasure = Bag
-    , deal =
-        Just
-            (BulkDeal
-                { amount = 2
-                , amountDiscount = 1
-                , discount = 50
-                }
-            )
-    }
-
-
-
 -- Model
 
 
@@ -151,7 +100,7 @@ type alias Model =
 
 initialModel : Model
 initialModel =
-    { items = [ canOfBeans, headOfLettuce, bagOfCashews ]
+    { items = []
     , cart = []
     }
 
