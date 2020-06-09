@@ -1,90 +1,132 @@
 module Main exposing (main)
 
 import Browser
-import Html exposing (Html, button, div, h1, h3, h4, main_, section, span, text)
+import Html exposing (Html, button, div, h1, h3, header, li, main_, span, text, ul)
 import Html.Attributes exposing (class)
 import Html.Events exposing (onClick)
-import Round
+import Round exposing (round)
 
 
 
 -- Domain types
 
 
-type Rule
-    = Normal Item
-    | HasPriceDeal Item PriceDeal
-    | HasBulkDeal Item BulkDeal
-
-
-type alias Item =
+type alias StoreItem =
     { name : String
-    , price : Float
-    , unitOfMeasure : UnitOfMeasure
+    , pricingRule : PricingRule
     }
 
 
-type alias PriceDeal =
-    { amount : Float, price : Float }
-
-
-type alias BulkDeal =
-    { amount : Float
-    , amountDiscount : Float
-    , discount : Float
+type alias CartItem =
+    { item : StoreItem
+    , amountInCart : Int
     }
 
 
-type UnitOfMeasure
-    = Ounce Float
-    | Bag
-    | Head
-    | Bushel
-    | Box
-    | Can
-    | Unit
+type PricingRule
+    = Normal Price
+    | HasDeal Deal
 
 
-unitOfMeasureToString : UnitOfMeasure -> String
-unitOfMeasureToString u =
-    case u of
+type alias Price =
+    { basePrice : Int
+    , quantity : Quantity
+    }
+
+
+type alias Deal =
+    { price : Price
+    , buyThisMany : Int
+    , getThisMany : Int
+    , atThisDiscount : Int
+    , dealType : DealType
+    }
+
+
+type DealType
+    = PriceDeal
+    | BulkDeal
+
+
+type Quantity
+    = Ounce Int
+    | Unit Int (Maybe String)
+
+
+qToString : Quantity -> String
+qToString q =
+    case q of
         Ounce ounces ->
-            String.fromFloat ounces
+            "per " ++ String.fromInt ounces ++ " ounces"
 
-        Bag ->
-            "bag"
-
-        Head ->
-            "head"
-
-        Bushel ->
-            "bushel"
-
-        Box ->
-            "box"
-
-        Can ->
-            "can"
-
-        Unit ->
-            "unit"
+        Unit amount maybeName ->
+            Maybe.withDefault "each" maybeName
 
 
-canOfBeans : Item
-canOfBeans =
-    { name = "Beans"
-    , price = 0.5
-    , unitOfMeasure = Can
-    , deal = Nothing
+salmon : StoreItem
+salmon =
+    { name = "Salmon"
+    , pricingRule =
+        Normal
+            { basePrice = 199
+            , quantity = Ounce 24
+            }
     }
 
 
-headOfLettuce : Item
-headOfLettuce =
+beans : StoreItem
+beans =
+    { name = "Beans"
+    , pricingRule =
+        HasDeal
+            { price =
+                { basePrice = 200
+                , quantity = Unit 1 (Just "can")
+                }
+            , buyThisMany = 2
+            , getThisMany = 1
+            , atThisDiscount = 50
+            , dealType = PriceDeal
+            }
+    }
+
+
+lettuce : StoreItem
+lettuce =
     { name = "Lettuce"
-    , price = 1
-    , unitOfMeasure = Head
-    , deal = Just (PriceDeal { amount = 3, price = 1 })
+    , pricingRule =
+        Normal
+            { basePrice = 100
+            , quantity = Unit 1 (Just "head")
+            }
+    }
+
+
+lemons : StoreItem
+lemons =
+    { name = "Lemons"
+    , pricingRule =
+        HasDeal
+            { price = { basePrice = 50, quantity = Unit 1 (Just "lemon") }
+            , buyThisMany = 2
+            , getThisMany = 1
+            , atThisDiscount = 100
+            , dealType = PriceDeal
+            }
+    }
+
+
+limes : StoreItem
+limes =
+    { name = "Limes"
+    , pricingRule =
+        HasDeal
+            { price = { basePrice = 50, quantity = Unit 1 (Just "Lime") }
+            , buyThisMany = 3
+            , getThisMany = 10
+            , atThisDiscount = 100
+            , dealType = PriceDeal
+            }
     }
 
 
@@ -93,88 +135,149 @@ headOfLettuce =
 
 
 type alias Model =
-    { items : List Item
-    , cart : List Item
+    { items : List StoreItem
+    , cart : List CartItem
     }
 
 
 initialModel : Model
 initialModel =
-    { items = []
+    { items = [ salmon, beans, lettuce, lemons, limes ]
     , cart = []
     }
 
 
 type Msg
-    = AddToCart Item
+    = AddToCart StoreItem Int
+    | Checkout
 
 
 update : Msg -> Model -> Model
 update msg model =
     case msg of
-        AddToCart item ->
-            { model | cart = model.cart ++ [ item ] }
+        AddToCart storeItem amount ->
+            let
+                predicate =
+                    \i -> i.item.name == storeItem.name
+
+                itemInCart =
+                    List.any predicate model.cart
+            in
+            if itemInCart == True then
+                { model
+                    | cart =
+                        List.map
+                            (\i ->
+                                if predicate i then
+                                    { i | amountInCart = i.amountInCart + amount }
+
+                                else
+                                    i
+                            )
+                            model.cart
+                }
+
+            else
+                { model
+                    | cart =
+                        model.cart
+                            ++ [ { item = storeItem, amountInCart = 1 }
+                               ]
+                }
+
+        Checkout ->
+            model
 
 
 view : Model -> Html Msg
 view model =
     main_ []
-        [ section [] (List.map viewItem model.items)
-        , section [ class "cart" ] (viewCart model.cart)
+        [ ul [ class "items" ] (List.map viewItem model.items)
+        , ul [ class "cart" ] (List.map viewCartItem model.cart)
         ]
 
 
-viewItem : Item -> Html Msg
+viewItem : StoreItem -> Html Msg
 viewItem item =
-    section []
-        [ h1 [] [ text item.name ]
-        , h3 []
-            [ text
-                ("$"
-                    ++ String.fromFloat item.price
-                    ++ "/"
-                    ++ unitOfMeasureToString item.unitOfMeasure
-                )
-            ]
-        , button [ onClick (AddToCart item) ] [ text "Add" ]
-        , case item.deal of
-            Just deal ->
-                viewDeal deal
+    let
+        title =
+            header []
+                [ case item.pricingRule of
+                    Normal p ->
+                        let
+                            price =
+                                Round.round 2 (toFloat p.basePrice / 100)
+                        in
+                        h1 [] [ text (item.name ++ " $" ++ price ++ qToString p.quantity) ]
 
-            Nothing ->
-                text ""
+                    HasDeal d ->
+                        let
+                            price =
+                                Round.round 2 (toFloat d.price.basePrice / 100)
+                        in
+                        div []
+                            [ span [ class "deal-label" ] [ text "Hot deal! " ]
+                            , h1 [] [ text (item.name ++ " $" ++ price ++ qToString d.price.quantity) ]
+                            ]
+                ]
+    in
+    li []
+        [ title
+        , h3 [] []
+        , button [ onClick (AddToCart item 1) ] [ text "Add" ]
+        , case item.pricingRule of
+            Normal _ ->
+                span [] []
+
+            HasDeal d ->
+                viewDeal d
         ]
 
 
 viewDeal : Deal -> Html Msg
-viewDeal deal =
+viewDeal { buyThisMany, getThisMany, atThisDiscount, dealType, price } =
     let
         dealText =
-            case deal of
-                PriceDeal d ->
+            case dealType of
+                PriceDeal ->
+                    let
+                        regularBundle =
+                            buyThisMany * price.basePrice
+
+                        discountedPrice =
+                            price.basePrice - price.basePrice * (atThisDiscount // 100)
+
+                        discountedBundle =
+                            getThisMany * discountedPrice
+
+                        totalPrice =
+                            Round.round 2 (toFloat (regularBundle + discountedBundle) / 100)
+                    in
                     "Selling "
-                        ++ String.fromFloat d.amount
+                        ++ String.fromInt (buyThisMany + getThisMany)
                         ++ " for $"
-                        ++ String.fromFloat d.price
+                        ++ totalPrice
                         ++ "!"
 
-                BulkDeal d ->
+                BulkDeal ->
                     "Buy "
-                        ++ String.fromFloat d.amount
-                        ++ ", "
-                        ++ String.fromFloat d.amountDiscount
-                        ++ String.fromFloat d.discount
+                        ++ String.fromInt buyThisMany
+                        ++ ", get "
+                        ++ String.fromInt getThisMany
+                        ++ " "
+                        ++ String.fromInt atThisDiscount
                         ++ "% off!"
     in
     div []
-        [ span [ class "deal-label" ] [ text "Hot deal! " ]
-        , span [ class "deal-text" ] [ text dealText ]
+        [ span [ class "deal-text" ] [ text dealText ] ]
+
+
+viewCartItem : CartItem -> Html Msg
+viewCartItem cartItem =
+    div []
+        [ span [] [ text cartItem.item.name ]
+        , span [] [ text (" " ++ String.fromInt cartItem.amountInCart) ]
         ]
-
-
-viewCart : List Item -> List (Html Msg)
-viewCart items =
-    List.map (\i -> h4 [] [ text i.name ]) items
 
 
 main : Program () Model Msg
