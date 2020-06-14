@@ -4,7 +4,8 @@ import Browser
 import Html exposing (Html, button, div, h1, h3, header, li, main_, span, text, ul)
 import Html.Attributes exposing (class)
 import Html.Events exposing (onClick)
-import Round exposing (round)
+import Quantity as Q exposing (Quantity)
+import Round
 
 
 
@@ -23,15 +24,15 @@ type alias CartItem =
     }
 
 
-type PricingRule
-    = Normal Price
-    | HasDeal Deal
-
-
 type alias Price =
     { basePrice : Int
     , quantity : Quantity
     }
+
+
+type PricingRule
+    = Normal Price
+    | HasDeal Deal
 
 
 type alias Deal =
@@ -48,28 +49,13 @@ type DealType
     | BulkDeal
 
 
-type Quantity
-    = Ounce Int
-    | Unit Int (Maybe String)
-
-
-qToString : Quantity -> String
-qToString q =
-    case q of
-        Ounce ounces ->
-            "per " ++ String.fromInt ounces ++ " ounces"
-
-        Unit amount maybeName ->
-            Maybe.withDefault "each" maybeName
-
-
 salmon : StoreItem
 salmon =
     { name = "Salmon"
     , pricingRule =
         Normal
             { basePrice = 199
-            , quantity = Ounce 24
+            , quantity = Q.Ounce 24
             }
     }
 
@@ -81,12 +67,12 @@ beans =
         HasDeal
             { price =
                 { basePrice = 200
-                , quantity = Unit 1 (Just "can")
+                , quantity = Q.Unit "can"
                 }
             , buyThisMany = 2
             , getThisMany = 1
             , atThisDiscount = 50
-            , dealType = PriceDeal
+            , dealType = BulkDeal
             }
     }
 
@@ -97,7 +83,7 @@ lettuce =
     , pricingRule =
         Normal
             { basePrice = 100
-            , quantity = Unit 1 (Just "head")
+            , quantity = Q.Unit "each"
             }
     }
 
@@ -107,7 +93,10 @@ lemons =
     { name = "Lemons"
     , pricingRule =
         HasDeal
-            { price = { basePrice = 50, quantity = Unit 1 (Just "lemon") }
+            { price =
+                { basePrice = 50
+                , quantity = Q.Unit "lemon"
+                }
             , buyThisMany = 2
             , getThisMany = 1
             , atThisDiscount = 100
@@ -121,7 +110,10 @@ limes =
     { name = "Limes"
     , pricingRule =
         HasDeal
-            { price = { basePrice = 50, quantity = Unit 1 (Just "Lime") }
+            { price =
+                { basePrice = 50
+                , quantity = Q.MultiUnit 2 "Limes"
+                }
             , buyThisMany = 3
             , getThisMany = 10
             , atThisDiscount = 100
@@ -164,8 +156,8 @@ update msg model =
                     List.any predicate model.cart
             in
             if itemInCart == True then
-                { model
-                    | cart =
+                let
+                    newCart =
                         List.map
                             (\i ->
                                 if predicate i then
@@ -175,7 +167,8 @@ update msg model =
                                     i
                             )
                             model.cart
-                }
+                in
+                { model | cart = newCart }
 
             else
                 { model
@@ -208,7 +201,15 @@ viewItem item =
                             price =
                                 Round.round 2 (toFloat p.basePrice / 100)
                         in
-                        h1 [] [ text (item.name ++ " $" ++ price ++ qToString p.quantity) ]
+                        h1 []
+                            [ text
+                                (item.name
+                                    ++ " $"
+                                    ++ price
+                                    ++ "/"
+                                    ++ Q.toString p.quantity
+                                )
+                            ]
 
                     HasDeal d ->
                         let
@@ -217,7 +218,15 @@ viewItem item =
                         in
                         div []
                             [ span [ class "deal-label" ] [ text "Hot deal! " ]
-                            , h1 [] [ text (item.name ++ " $" ++ price ++ qToString d.price.quantity) ]
+                            , h1 []
+                                [ text
+                                    (item.name
+                                        ++ " $"
+                                        ++ price
+                                        ++ "/"
+                                        ++ Q.toString d.price.quantity
+                                    )
+                                ]
                             ]
                 ]
     in
