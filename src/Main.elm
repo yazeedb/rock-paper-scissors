@@ -9,6 +9,11 @@ import Round
 
 
 
+{-
+   Need to print quantities in cart. How to be less verbose (unwrapping types everywhere)?
+   How to calculate cart total?
+   How to abstract Cents and avoid impossible operations?
+-}
 -- Domain types
 
 
