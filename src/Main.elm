@@ -1,18 +1,19 @@
 module Main exposing (main)
 
 import Browser
+import Dollar as D exposing (Dollar)
 import Html exposing (Html, button, div, h1, h3, header, li, main_, span, text, ul)
 import Html.Attributes exposing (class)
 import Html.Events exposing (onClick)
 import Quantity as Q exposing (Quantity)
-import Round
 
 
 
 {-
-   Need to print quantities in cart. How to be less verbose (unwrapping types everywhere)?
-   How to calculate cart total?
-   How to abstract Cents and avoid impossible operations?
+   * Need to print quantities in cart.
+   * How to be less verbose (unwrapping types everywhere)?
+   * How to calculate cart total?
+   * How to abstract Cents and avoid impossible operations?
 -}
 -- Domain types
 
@@ -30,9 +31,14 @@ type alias CartItem =
 
 
 type alias Price =
-    { basePrice : Int
+    { basePrice : Dollar
     , quantity : Quantity
     }
+
+
+printPrice : Price -> String
+printPrice p =
+    D.toString p.basePrice ++ "/" ++ Q.toString p.quantity
 
 
 type PricingRule
@@ -59,7 +65,7 @@ salmon =
     { name = "Salmon"
     , pricingRule =
         Normal
-            { basePrice = 199
+            { basePrice = D.fromCents 199
             , quantity = Q.Ounce 24
             }
     }
@@ -71,13 +77,15 @@ beans =
     , pricingRule =
         HasDeal
             { price =
-                { basePrice = 200
+                { basePrice = D.fromCents 200
                 , quantity = Q.Unit "can"
                 }
             , buyThisMany = 2
             , getThisMany = 1
             , atThisDiscount = 50
-            , dealType = BulkDeal
+
+            -- , dealType = BulkDeal
+            , dealType = PriceDeal
             }
     }
 
@@ -87,7 +95,7 @@ lettuce =
     { name = "Lettuce"
     , pricingRule =
         Normal
-            { basePrice = 100
+            { basePrice = D.fromCents 100
             , quantity = Q.Unit "each"
             }
     }
@@ -99,7 +107,7 @@ lemons =
     , pricingRule =
         HasDeal
             { price =
-                { basePrice = 50
+                { basePrice = D.fromCents 50
                 , quantity = Q.Unit "lemon"
                 }
             , buyThisMany = 2
@@ -116,7 +124,7 @@ limes =
     , pricingRule =
         HasDeal
             { price =
-                { basePrice = 50
+                { basePrice = D.fromCents 50
                 , quantity = Q.MultiUnit 2 "Limes"
                 }
             , buyThisMany = 3
@@ -177,10 +185,7 @@ update msg model =
 
             else
                 { model
-                    | cart =
-                        model.cart
-                            ++ [ { item = storeItem, amountInCart = 1 }
-                               ]
+                    | cart = model.cart ++ [ { item = storeItem, amountInCart = 1 } ]
                 }
 
         Checkout ->
@@ -202,36 +207,12 @@ viewItem item =
             header []
                 [ case item.pricingRule of
                     Normal p ->
-                        let
-                            price =
-                                Round.round 2 (toFloat p.basePrice / 100)
-                        in
-                        h1 []
-                            [ text
-                                (item.name
-                                    ++ " $"
-                                    ++ price
-                                    ++ "/"
-                                    ++ Q.toString p.quantity
-                                )
-                            ]
+                        h1 [] [ text (item.name ++ " " ++ printPrice p) ]
 
                     HasDeal d ->
-                        let
-                            price =
-                                Round.round 2 (toFloat d.price.basePrice / 100)
-                        in
                         div []
                             [ span [ class "deal-label" ] [ text "Hot deal! " ]
-                            , h1 []
-                                [ text
-                                    (item.name
-                                        ++ " $"
-                                        ++ price
-                                        ++ "/"
-                                        ++ Q.toString d.price.quantity
-                                    )
-                                ]
+                            , h1 [] [ text (item.name ++ " " ++ printPrice d.price) ]
                             ]
                 ]
     in
@@ -256,21 +237,20 @@ viewDeal { buyThisMany, getThisMany, atThisDiscount, dealType, price } =
                 PriceDeal ->
                     let
                         regularBundle =
-                            buyThisMany * price.basePrice
+                            D.times buyThisMany price.basePrice
 
                         discountedPrice =
-                            price.basePrice - price.basePrice * (atThisDiscount // 100)
+                            D.removePercentage atThisDiscount price.basePrice
 
+                        -- D.times
+                        -- toFloat price.basePrice - toFloat price.basePrice * (toFloat atThisDiscount / 100)
                         discountedBundle =
-                            getThisMany * discountedPrice
-
-                        totalPrice =
-                            Round.round 2 (toFloat (regularBundle + discountedBundle) / 100)
+                            D.times getThisMany discountedPrice
                     in
                     "Selling "
                         ++ String.fromInt (buyThisMany + getThisMany)
-                        ++ " for $"
-                        ++ totalPrice
+                        ++ " for "
+                        ++ D.toString (D.add regularBundle discountedBundle)
                         ++ "!"
 
                 BulkDeal ->
